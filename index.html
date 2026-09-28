@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grand Bay PMS — Invoice Management</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  *{scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent}
+  body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  .glass{background:rgba(255,255,255,.82);backdrop-filter:blur(10px)}
+  .modal-backdrop{background:rgba(15,23,42,.55);backdrop-filter:blur(4px)}
+  .no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{scrollbar-width:none}
+  @media print{
+    body{background:#fff!important}
+    .no-print{display:none!important}
+    #printArea{display:block!important;position:static!important;box-shadow:none!important;border:0!important}
+  }
+  #printArea{display:none}
+  .fade-in{animation:fade .2s ease-out}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.field{display:flex;flex-direction:column;gap:.35rem}
+.field span{font-size:.72rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
+.field input,.field select,.item-row input,.item-row select{border:1px solid #e2e8f0;border-radius:.65rem;padding:.6rem .7rem;outline:none;background:#fff}
+.field input:focus,.field select:focus,.item-row input:focus,.item-row select:focus{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(96,165,250,.15)}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+<div id="app" class="min-h-screen flex">
+  <aside class="no-print fixed inset-y-0 left-0 z-30 w-64 bg-slate-950 text-slate-300 hidden lg:flex flex-col">
+    <div class="px-6 py-6 border-b border-slate-800">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-blue-600 grid place-items-center text-white font-bold">GB</div>
+        <div><div class="text-white font-bold">Grand Bay</div><div class="text-xs text-slate-500">Hotel PMS</div></div>
+      </div>
+    </div>
+    <nav class="p-4 space-y-1 flex-1">
+      <div class="px-3 pt-2 pb-2 text-[10px] uppercase tracking-widest text-slate-600 font-bold">Front Office</div>
+      <button class="nav-item">⌂ <span>Dashboard</span></button>
+      <button class="nav-item">▣ <span>Reservations</span></button>
+      <button class="nav-item">♙ <span>Guest Accounts</span></button>
+      <button class="nav-item">▤ <span>Folios</span></button>
+      <button class="nav-item active">▧ <span>Invoices</span></button>
+      <button class="nav-item">₱ <span>Payments</span></button>
+      <div class="px-3 pt-5 pb-2 text-[10px] uppercase tracking-widest text-slate-600 font-bold">Management</div>
+      <button class="nav-item">▥ <span>Reports</span></button>
+      <button class="nav-item">⚙ <span>Settings</span></button>
+    </nav>
+    <div class="p-4 border-t border-slate-800">
+      <div class="rounded-xl bg-slate-900 p-3 text-xs">
+        <div class="text-slate-500">Front Desk</div>
+        <div class="text-white font-medium mt-1">Administrator</div>
+        <div class="text-emerald-400 mt-2">● System Online</div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="lg:ml-64 w-full min-w-0">
+    <header class="no-print sticky top-0 z-20 h-16 glass border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div>
+        <div class="text-xs text-slate-500">Front Office / Accounting</div>
+        <h1 class="font-bold text-slate-900">Invoice Management</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="mobileCreateBtn" class="lg:hidden bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-semibold">+ Invoice</button>
+        <div class="hidden sm:block text-right"><div class="text-xs text-slate-500">Today</div><div id="todayLabel" class="text-sm font-semibold"></div></div>
+        <div class="h-9 w-9 rounded-full bg-blue-50 text-blue-700 grid place-items-center font-bold">AD</div>
+      </div>
+    </header>
+
+    <div class="p-4 sm:p-6 lg:p-8 space-y-6">
+      <section class="no-print">
+        <div class="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
+          <div><h2 class="text-2xl font-bold text-slate-950">Invoice Center</h2><p class="text-sm text-slate-500 mt-1">Create, manage, and reconcile guest invoices.</p></div>
+          <div class="flex flex-wrap gap-2">
+            <button id="createBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl font-semibold shadow-sm">＋ Create Invoice</button>
+            <button id="excelBtn" class="bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-semibold">⇩ Export Excel</button>
+            <button id="printBtn" class="bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-semibold">⎙ Print</button>
+            <button id="pdfBtn" class="bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-semibold">PDF</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="no-print grid grid-cols-2 xl:grid-cols-5 gap-4" id="stats"></section>
+
+      <section class="no-print bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+        <div class="flex flex-col lg:flex-row gap-3">
+          <div class="relative flex-1"><span class="absolute left-3 top-2.5 text-slate-400">⌕</span><input id="search" class="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400" placeholder="Search invoice, guest, booking reference..."></div>
+          <select id="statusFilter" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white"><option value="">All statuses</option><option>PAID</option><option>PARTIAL</option><option>UNPAID</option></select>
+          <input id="dateFilter" type="date" class="px-4 py-2.5 rounded-xl border border-slate-200">
+          <button id="clearFilter" class="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50">Clear</button>
+        </div>
+      </section>
+
+      <section class="no-print bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between"><div><h3 class="font-bold">Recent Invoices</h3><p class="text-xs text-slate-500 mt-1">Stored locally in this browser</p></div><span id="recordCount" class="text-xs bg-slate-100 px-2.5 py-1 rounded-full"></span></div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>
+              <th class="text-left px-5 py-3">Invoice #</th><th class="text-left px-5 py-3">Guest</th><th class="text-left px-5 py-3">Booking</th><th class="text-left px-5 py-3">Room</th><th class="text-left px-5 py-3">Date</th><th class="text-right px-5 py-3">Total</th><th class="text-right px-5 py-3">Paid</th><th class="text-right px-5 py-3">Balance</th><th class="text-center px-5 py-3">Status</th><th class="text-right px-5 py-3">Actions</th>
+            </tr></thead>
+            <tbody id="invoiceTable" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <div id="emptyState" class="hidden p-12 text-center"><div class="mx-auto h-12 w-12 rounded-2xl bg-slate-100 grid place-items-center text-slate-400 text-xl">▧</div><h3 class="font-bold mt-3">No invoices found</h3><p class="text-sm text-slate-500 mt-1">Try clearing your filters or create a new invoice.</p></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- Invoice modal -->
+<div id="invoiceModal" class="no-print hidden fixed inset-0 z-50 modal-backdrop overflow-y-auto p-3 sm:p-6">
+  <div class="max-w-7xl mx-auto bg-slate-100 rounded-2xl shadow-2xl overflow-hidden fade-in">
+    <div class="bg-white px-5 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 z-10">
+      <div><h2 id="modalTitle" class="text-lg font-bold">Create Invoice</h2><p class="text-xs text-slate-500">Hotel guest invoice and account settlement</p></div>
+      <button id="closeModal" class="h-9 w-9 rounded-lg hover:bg-slate-100 text-xl">×</button>
+    </div>
+    <div class="p-4 sm:p-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <section class="space-y-5">
+        <div class="bg-white border border-slate-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between mb-4"><h3 class="font-bold">Selected Guest</h3><span class="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">Guest Account</span></div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="field"><span>Guest Name</span><input id="fGuest" value="Juan Dela Cruz"></label>
+            <label class="field"><span>Guest ID</span><input id="fGuestId" value="G-2026-00451"></label>
+            <label class="field"><span>Email</span><input id="fEmail" value="juan.delacruz@email.com"></label>
+            <label class="field"><span>Phone</span><input id="fPhone" value="+63 917 555 0182"></label>
+            <label class="field sm:col-span-2"><span>Address</span><input id="fAddress" value="Dumaguete City, Negros Oriental"></label>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-5">
+          <h3 class="font-bold mb-4">Stay Information</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="field"><span>Booking Reference</span><input id="fBooking" value="BK-2026-01872"></label>
+            <label class="field"><span>Room Number</span><input id="fRoom" value="502"></label>
+            <label class="field"><span>Room Type</span><select id="fRoomType"><option>Deluxe King</option><option>Standard Queen</option><option>Executive Suite</option><option>Family Room</option><option>Presidential Suite</option></select></label>
+            <label class="field"><span>Guests</span><input id="fGuests" value="2 Adults"></label>
+            <label class="field"><span>Check-in</span><input id="fCheckin" type="date" value="2026-09-25"></label>
+            <label class="field"><span>Check-out</span><input id="fCheckout" type="date" value="2026-09-28"></label>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-5">
+          <h3 class="font-bold mb-4">Invoice Information</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="field"><span>Invoice Number</span><input id="fInvoice" readonly class="bg-slate-50"></label>
+            <label class="field"><span>Invoice Date</span><input id="fInvoiceDate" type="date"></label>
+            <label class="field"><span>Due Date</span><input id="fDueDate" type="date"></label>
+            <label class="field"><span>Payment Method</span><select id="fPaymentMethod"><option>Cash</option><option>Credit Card</option><option>Debit Card</option><option>GCash</option><option>Bank Transfer</option><option>Mixed / Multiple</option></select></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div class="p-5 border-b border-slate-200 flex items-center justify-between"><div><h3 class="font-bold">Invoice Breakdown</h3><p class="text-xs text-slate-500 mt-1">Edit quantities and prices directly.</p></div><button id="addItem" class="bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-2 rounded-lg text-sm font-semibold">＋ Add Item</button></div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs min-w-[720px]">
+            <thead class="bg-slate-50 text-slate-500 uppercase"><tr><th class="px-3 py-3 text-left">Date</th><th class="px-3 py-3 text-left">Description</th><th class="px-3 py-3 text-left">Category</th><th class="px-3 py-3">Qty</th><th class="px-3 py-3 text-right">Unit Price</th><th class="px-3 py-3 text-right">Amount</th><th></th></tr></thead>
+            <tbody id="itemRows" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <div class="p-5 border-t border-slate-200 bg-slate-50/70">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl ml-auto">
+            <label class="field"><span>Discount (₱)</span><input id="fDiscount" type="number" min="0" value="0"></label>
+            <label class="field"><span>VAT (%)</span><input id="fVat" type="number" min="0" value="12"></label>
+            <label class="field"><span>Service Charge (%)</span><input id="fService" type="number" min="0" value="10"></label>
+            <label class="field"><span>Amount Paid (₱)</span><input id="fPaid" type="number" min="0" value="0"></label>
+          </div>
+          <div class="mt-5 space-y-2 max-w-xl ml-auto text-sm">
+            <div class="flex justify-between"><span class="text-slate-500">Room Charges</span><strong id="sumRoom">₱0.00</strong></div>
+            <div class="flex justify-between"><span class="text-slate-500">Additional Services</span><strong id="sumServices">₱0.00</strong></div>
+            <div class="flex justify-between"><span class="text-slate-500">Subtotal</span><strong id="sumSubtotal">₱0.00</strong></div>
+            <div class="flex justify-between text-slate-500"><span>Discount</span><span id="sumDiscount">- ₱0.00</span></div>
+            <div class="flex justify-between text-slate-500"><span>VAT</span><span id="sumVat">₱0.00</span></div>
+            <div class="flex justify-between text-slate-500"><span>Service Charge</span><span id="sumService">₱0.00</span></div>
+            <div class="border-t border-slate-200 pt-3 flex justify-between items-center"><span class="font-bold">Grand Total</span><strong id="sumTotal" class="text-2xl text-blue-700">₱0.00</strong></div>
+            <div class="flex justify-between"><span class="text-slate-500">Amount Paid</span><span id="sumPaid">₱0.00</span></div>
+            <div class="flex justify-between font-bold"><span>Balance Due</span><span id="sumBalance">₱0.00</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="px-5 py-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row justify-end gap-2 sticky bottom-0">
+      <button id="cancelModal" class="px-4 py-2.5 rounded-xl border border-slate-200 font-semibold">Cancel</button>
+      <button id="saveInvoice" class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold">Save Invoice</button>
+    </div>
+  </div>
+</div>
+
+<!-- View modal -->
+<div id="viewModal" class="no-print hidden fixed inset-0 z-50 modal-backdrop overflow-y-auto p-3 sm:p-6">
+ <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden fade-in">
+  <div class="px-5 py-4 border-b flex justify-between"><div><h2 class="font-bold">Invoice Details</h2><p id="viewMeta" class="text-xs text-slate-500"></p></div><button id="closeView" class="h-9 w-9 rounded-lg hover:bg-slate-100 text-xl">×</button></div>
+  <div id="viewContent" class="p-6"></div>
+  <div class="p-5 border-t bg-slate-50 flex justify-end gap-2"><button id="viewPrint" class="px-4 py-2 rounded-xl bg-slate-900 text-white">Print</button><button id="viewPdf" class="px-4 py-2 rounded-xl bg-blue-600 text-white">Download PDF</button></div>
+ </div>
+</div>
+
+<!-- Delete modal -->
+<div id="deleteModal" class="no-print hidden fixed inset-0 z-[60] modal-backdrop grid place-items-center p-4">
+ <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6"><div class="h-11 w-11 rounded-xl bg-red-50 text-red-600 grid place-items-center text-xl">!</div><h3 class="font-bold text-lg mt-4">Delete invoice?</h3><p class="text-sm text-slate-500 mt-1">This action cannot be undone. The selected invoice will be removed from this browser.</p><div class="flex justify-end gap-2 mt-6"><button id="cancelDelete" class="px-4 py-2 rounded-xl border">Cancel</button><button id="confirmDelete" class="px-4 py-2 rounded-xl bg-red-600 text-white font-semibold">Delete</button></div></div>
+</div>
+
+<div id="toast" class="no-print fixed right-4 bottom-4 z-[80] hidden">
+ <div class="bg-slate-950 text-white px-4 py-3 rounded-xl shadow-xl text-sm flex items-center gap-2"><span class="text-emerald-400">●</span><span id="toastText"></span></div>
+</div>
+
+<!-- print-only invoice -->
+<div id="printArea" class="max-w-4xl mx-auto p-8"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const peso = n => '₱' + Number(n||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const dateFmt = s => s ? new Date(s+'T00:00:00').toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) : '—';
+const todayISO = () => new Date().toISOString().slice(0,10);
+let invoices = JSON.parse(localStorage.getItem('gb_invoices') || 'null');
+let editingId = null, viewingId = null, deletingId = null;
+
+const seed = [
+ {id:'INV-2026-00981',guest:'Juan Dela Cruz',guestId:'G-2026-00451',email:'juan.delacruz@email.com',phone:'+63 917 555 0182',address:'Dumaguete City, Negros Oriental',booking:'BK-2026-01872',room:'502',roomType:'Deluxe King',checkin:'2026-09-25',checkout:'2026-09-28',guests:'2 Adults',invoiceDate:'2026-09-28',dueDate:'2026-09-28',method:'Credit Card',discount:0,vatRate:12,serviceRate:10,paid:20557,items:[
+  ['2026-09-25','Deluxe King Room','Room',1,4500],['2026-09-26','Deluxe King Room','Room',1,4500],['2026-09-27','Deluxe King Room','Room',1,4500],['2026-09-26','Breakfast Buffet','Food & Beverage',2,450],['2026-09-27','Breakfast Buffet','Food & Beverage',2,450],['2026-09-27','Laundry Service','Laundry',1,350],['2026-09-28','Airport Transfer','Transportation',1,1200]]},
+ {id:'INV-2026-00980',guest:'Maria Santos',guestId:'G-2026-00398',email:'maria.santos@email.com',phone:'+63 918 555 0120',address:'Cebu City',booking:'BK-2026-01871',room:'305',roomType:'Standard Queen',checkin:'2026-09-26',checkout:'2026-09-28',guests:'2 Adults',invoiceDate:'2026-09-28',dueDate:'2026-09-28',method:'GCash',discount:500,vatRate:12,serviceRate:10,paid:10000,items:[['2026-09-26','Standard Queen Room','Room',1,3800],['2026-09-27','Standard Queen Room','Room',1,3800],['2026-09-27','Dinner','Food & Beverage',2,750],['2026-09-28','Late Checkout','Other',1,800]]},
+ {id:'INV-2026-00979',guest:'Pedro Reyes',guestId:'G-2026-00355',email:'pedro.reyes@email.com',phone:'+63 919 555 0144',address:'Tagbilaran City, Bohol',booking:'BK-2026-01870',room:'214',roomType:'Deluxe King',checkin:'2026-09-27',checkout:'2026-09-29',guests:'1 Adult',invoiceDate:'2026-09-27',dueDate:'2026-09-29',method:'Cash',discount:0,vatRate:12,serviceRate:10,paid:0,items:[['2026-09-27','Deluxe King Room','Room',1,4500],['2026-09-27','Minibar','Food & Beverage',1,650],['2026-09-27','Laundry Service','Laundry',1,350],['2026-09-28','Airport Transfer','Transportation',1,1200]]},
+ {id:'INV-2026-00978',guest:'Angela Lim',guestId:'G-2026-00342',email:'angela.lim@email.com',phone:'+63 917 555 0190',address:'Manila',booking:'BK-2026-01864',room:'601',roomType:'Executive Suite',checkin:'2026-09-24',checkout:'2026-09-27',guests:'2 Adults',invoiceDate:'2026-09-27',dueDate:'2026-09-27',method:'Bank Transfer',discount:1000,vatRate:12,serviceRate:10,paid:21000,items:[['2026-09-24','Executive Suite','Room',1,6500],['2026-09-25','Executive Suite','Room',1,6500],['2026-09-26','Executive Suite','Room',1,6500],['2026-09-25','Spa Treatment','Spa',2,1200],['2026-09-26','Room Service','Food & Beverage',1,900]]},
+ {id:'INV-2026-00977',guest:'Carlos Mendoza',guestId:'G-2026-00311',email:'carlos.m@email.com',phone:'+63 917 555 0102',address:'Bacolod City',booking:'BK-2026-01858',room:'118',roomType:'Family Room',checkin:'2026-09-23',checkout:'2026-09-26',guests:'3 Adults, 1 Child',invoiceDate:'2026-09-26',dueDate:'2026-09-26',method:'Credit Card',discount:0,vatRate:12,serviceRate:10,paid:17850,items:[['2026-09-23','Family Room','Room',1,5000],['2026-09-24','Family Room','Room',1,5000],['2026-09-25','Family Room','Room',1,5000],['2026-09-24','Extra Bed','Other',1,1000],['2026-09-25','Breakfast Buffet','Food & Beverage',3,450]]},
+ {id:'INV-2026-00976',guest:'Sofia Navarro',guestId:'G-2026-00298',email:'sofia.n@email.com',phone:'+63 918 555 0111',address:'Iloilo City',booking:'BK-2026-01851',room:'410',roomType:'Standard Queen',checkin:'2026-09-22',checkout:'2026-09-24',guests:'2 Adults',invoiceDate:'2026-09-24',dueDate:'2026-09-24',method:'Debit Card',discount:250,vatRate:12,serviceRate:10,paid:10450,items:[['2026-09-22','Standard Queen Room','Room',1,3800],['2026-09-23','Standard Queen Room','Room',1,3800],['2026-09-23','Lunch','Food & Beverage',2,550],['2026-09-24','Laundry Service','Laundry',1,300]]},
+ {id:'INV-2026-00975',guest:'Robert Tan',guestId:'G-2026-00274',email:'robert.tan@email.com',phone:'+63 917 555 0166',address:'Cebu City',booking:'BK-2026-01843',room:'705',roomType:'Executive Suite',checkin:'2026-09-20',checkout:'2026-09-23',guests:'2 Adults',invoiceDate:'2026-09-23',dueDate:'2026-09-23',method:'Cash',discount:0,vatRate:12,serviceRate:10,paid:0,items:[['2026-09-20','Executive Suite','Room',1,6500],['2026-09-21','Executive Suite','Room',1,6500],['2026-09-22','Executive Suite','Room',1,6500],['2026-09-21','Dinner','Food & Beverage',2,950]]},
+ {id:'INV-2026-00974',guest:'Nina Garcia',guestId:'G-2026-00261',email:'nina.g@email.com',phone:'+63 919 555 0177',address:'Davao City',booking:'BK-2026-01835',room:'209',roomType:'Deluxe King',checkin:'2026-09-18',checkout:'2026-09-20',guests:'1 Adult',invoiceDate:'2026-09-20',dueDate:'2026-09-20',method:'GCash',discount:0,vatRate:12,serviceRate:10,paid:0,items:[['2026-09-18','Deluxe King Room','Room',1,4500],['2026-09-19','Deluxe King Room','Room',1,4500],['2026-09-19','Room Service','Food & Beverage',1,750],['2026-09-20','Airport Transfer','Transportation',1,1200]]}
+].map(x=>normalizeInvoice(x));
+if(!invoices){ invoices=seed; persist(); }
+
+function normalizeInvoice(x){
+  return {...x, items:x.items.map((r,i)=>Array.isArray(r)?{date:r[0],description:r[1],category:r[2],qty:Number(r[3]),price:Number(r[4]),id:i+1}:r)};
+}
+function persist(){localStorage.setItem('gb_invoices',JSON.stringify(invoices));}
+function calc(inv){
+  const room=inv.items.filter(i=>i.category==='Room').reduce((s,i)=>s+i.qty*i.price,0);
+  const sub=inv.items.reduce((s,i)=>s+i.qty*i.price,0);
+  const taxable=Math.max(0,sub-Number(inv.discount||0));
+  const vat=taxable*Number(inv.vatRate||0)/100;
+  const service=taxable*Number(inv.serviceRate||0)/100;
+  const total=taxable+vat+service;
+  const balance=Math.max(0,total-Number(inv.paid||0));
+  const status=balance<=0.005?'PAID':Number(inv.paid||0)>0?'PARTIAL':'UNPAID';
+  return {room,services:sub-room,sub,discount:Number(inv.discount||0),vat,service,total,paid:Number(inv.paid||0),balance,status};
+}
+function nextInvoice(){
+  const nums=invoices.map(i=>parseInt(i.id.split('-').pop(),10)).filter(Number.isFinite);
+  return 'INV-2026-'+String(Math.max(9800,...nums)+1).padStart(5,'0');
+}
+function toast(msg){$('toastText').textContent=msg;$('toast').classList.remove('hidden');clearTimeout(window._toast);window._toast=setTimeout(()=>$('toast').classList.add('hidden'),2500)}
+function statusBadge(s){const c={PAID:'bg-emerald-50 text-emerald-700 border-emerald-200',PARTIAL:'bg-amber-50 text-amber-700 border-amber-200',UNPAID:'bg-red-50 text-red-700 border-red-200'}[s];return `<span class="inline-flex items-center px-2 py-1 rounded-full border text-[11px] font-bold ${c}">${s}</span>`}
+function renderStats(){
+  const cs=invoices.map(calc), paid=cs.filter(c=>c.status==='PAID').length, partial=cs.filter(c=>c.status==='PARTIAL').length, unpaid=cs.filter(c=>c.status==='UNPAID').length;
+  const revenue=cs.reduce((s,c)=>s+c.paid,0);
+  const cards=[['Total Invoices',invoices.length,'▧','bg-blue-50 text-blue-600'],['Paid',paid,'✓','bg-emerald-50 text-emerald-600'],['Partially Paid',partial,'◐','bg-amber-50 text-amber-600'],['Unpaid',unpaid,'!','bg-red-50 text-red-600'],['Total Revenue',peso(revenue),'₱','bg-violet-50 text-violet-600']];
+  $('stats').innerHTML=cards.map(c=>`<div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><div class="flex justify-between"><div><div class="text-xs text-slate-500">${c[0]}</div><div class="text-xl font-bold mt-2">${c[1]}</div></div><div class="h-10 w-10 rounded-xl ${c[3]} grid place-items-center font-bold">${c[2]}</div></div></div>`).join('');
+}
+function renderTable(){
+  const q=$('search').value.toLowerCase().trim(), st=$('statusFilter').value, dt=$('dateFilter').value;
+  const rows=invoices.filter(inv=>{const c=calc(inv);const hay=[inv.id,inv.guest,inv.booking,inv.room].join(' ').toLowerCase();return (!q||hay.includes(q))&&(!st||c.status===st)&&(!dt||inv.invoiceDate===dt)}).sort((a,b)=>b.invoiceDate.localeCompare(a.invoiceDate));
+  $('recordCount').textContent=`${rows.length} record${rows.length===1?'':'s'}`;
+  $('emptyState').classList.toggle('hidden',rows.length!==0);
+  $('invoiceTable').innerHTML=rows.map(inv=>{const c=calc(inv);return `<tr class="hover:bg-slate-50">
+    <td class="px-5 py-4 font-semibold text-blue-700">${inv.id}</td><td class="px-5 py-4"><div class="font-medium">${inv.guest}</div><div class="text-xs text-slate-400">${inv.guestId}</div></td>
+    <td class="px-5 py-4 text-slate-600">${inv.booking}</td><td class="px-5 py-4">${inv.room}</td><td class="px-5 py-4">${dateFmt(inv.invoiceDate)}</td>
+    <td class="px-5 py-4 text-right font-semibold">${peso(c.total)}</td><td class="px-5 py-4 text-right">${peso(c.paid)}</td><td class="px-5 py-4 text-right">${peso(c.balance)}</td>
+    <td class="px-5 py-4 text-center">${statusBadge(c.status)}</td>
+    <td class="px-5 py-4"><div class="flex justify-end gap-1"><button title="View" onclick="viewInvoice('${inv.id}')" class="p-2 rounded-lg hover:bg-blue-50 text-blue-600">◉</button><button title="Edit" onclick="editInvoice('${inv.id}')" class="p-2 rounded-lg hover:bg-slate-100">✎</button><button title="Print" onclick="printInvoice('${inv.id}')" class="p-2 rounded-lg hover:bg-slate-100">⎙</button><button title="Delete" onclick="askDelete('${inv.id}')" class="p-2 rounded-lg hover:bg-red-50 text-red-600">⌫</button></div></td>
+  </tr>`}).join('');
+}
+function renderAll(){renderStats();renderTable()}
+function openModal(inv=null){
+  editingId=inv?.id||null; $('modalTitle').textContent=inv?'Edit Invoice':'Create Invoice';
+  $('fInvoice').value=inv?.id||nextInvoice(); $('fInvoiceDate').value=inv?.invoiceDate||todayISO(); $('fDueDate').value=inv?.dueDate||todayISO();
+  $('fGuest').value=inv?.guest||'Juan Dela Cruz';$('fGuestId').value=inv?.guestId||'G-2026-00451';$('fEmail').value=inv?.email||'juan.delacruz@email.com';$('fPhone').value=inv?.phone||'+63 917 555 0182';$('fAddress').value=inv?.address||'Dumaguete City, Negros Oriental';
+  $('fBooking').value=inv?.booking||'BK-2026-01872';$('fRoom').value=inv?.room||'502';$('fRoomType').value=inv?.roomType||'Deluxe King';$('fGuests').value=inv?.guests||'2 Adults';$('fCheckin').value=inv?.checkin||'2026-09-25';$('fCheckout').value=inv?.checkout||'2026-09-28';
+  $('fPaymentMethod').value=inv?.method||'Cash';$('fDiscount').value=inv?.discount||0;$('fVat').value=inv?.vatRate??12;$('fService').value=inv?.serviceRate??10;$('fPaid').value=inv?.paid||0;
+  const items=inv?.items||[['2026-09-25','Deluxe King Room','Room',1,4500],['2026-09-26','Deluxe King Room','Room',1,4500],['2026-09-27','Deluxe King Room','Room',1,4500],['2026-09-26','Breakfast Buffet','Food & Beverage',2,450],['2026-09-27','Breakfast Buffet','Food & Beverage',2,450],['2026-09-27','Laundry Service','Laundry',1,350],['2026-09-28','Airport Transfer','Transportation',1,1200]].map(r=>Array.isArray(r)?{date:r[0],description:r[1],category:r[2],qty:r[3],price:r[4]}:r);
+  $('itemRows').innerHTML=''; items.forEach(addItemRow); recalcForm();$('invoiceModal').classList.remove('hidden');document.body.classList.add('overflow-hidden');
+}
+function addItemRow(item={date:todayISO(),description:'New Service',category:'Other',qty:1,price:0}){
+ const tr=document.createElement('tr');tr.className='item-row';tr.innerHTML=`
+ <td class="p-2"><input type="date" value="${item.date}" class="i-date"></td>
+ <td class="p-2"><input value="${item.description}" class="i-desc w-40"></td>
+ <td class="p-2"><select class="i-cat w-32">${['Room','Food & Beverage','Laundry','Transportation','Spa','Other'].map(x=>`<option ${x===item.category?'selected':''}>${x}</option>`).join('')}</select></td>
+ <td class="p-2"><input type="number" min="0" step="1" value="${item.qty}" class="i-qty w-16 text-center"></td>
+ <td class="p-2"><input type="number" min="0" step="0.01" value="${item.price}" class="i-price w-28 text-right"></td>
+ <td class="p-2 text-right font-semibold i-amount">${peso(item.qty*item.price)}</td>
+ <td class="p-2"><button class="remove-item text-red-500 hover:bg-red-50 rounded-lg p-2">×</button></td>`;
+ $('itemRows').appendChild(tr);
+ tr.querySelectorAll('input,select').forEach(e=>e.addEventListener('input',recalcForm));
+ tr.querySelector('.remove-item').onclick=()=>{tr.remove();recalcForm()};
+}
+function formItems(){return [...document.querySelectorAll('.item-row')].map(r=>({date:r.querySelector('.i-date').value,description:r.querySelector('.i-desc').value,category:r.querySelector('.i-cat').value,qty:Number(r.querySelector('.i-qty').value)||0,price:Number(r.querySelector('.i-price').value)||0}))}
+function recalcForm(){
+ const items=formItems(), room=items.filter(i=>i.category==='Room').reduce((s,i)=>s+i.qty*i.price,0), sub=items.reduce((s,i)=>s+i.qty*i.price,0), discount=Number($('fDiscount').value)||0, taxable=Math.max(0,sub-discount), vat=taxable*(Number($('fVat').value)||0)/100, service=taxable*(Number($('fService').value)||0)/100, total=taxable+vat+service, paid=Number($('fPaid').value)||0, balance=Math.max(0,total-paid);
+ items.forEach((i,idx)=>{const r=document.querySelectorAll('.item-row')[idx];r.querySelector('.i-amount').textContent=peso(i.qty*i.price)});
+ $('sumRoom').textContent=peso(room);$('sumServices').textContent=peso(sub-room);$('sumSubtotal').textContent=peso(sub);$('sumDiscount').textContent='- '+peso(discount);$('sumVat').textContent=peso(vat);$('sumService').textContent=peso(service);$('sumTotal').textContent=peso(total);$('sumPaid').textContent=peso(paid);$('sumBalance').textContent=peso(balance);
+}
+function collectForm(){
+ const x={id:$('fInvoice').value,guest:$('fGuest').value,guestId:$('fGuestId').value,email:$('fEmail').value,phone:$('fPhone').value,address:$('fAddress').value,booking:$('fBooking').value,room:$('fRoom').value,roomType:$('fRoomType').value,guests:$('fGuests').value,checkin:$('fCheckin').value,checkout:$('fCheckout').value,invoiceDate:$('fInvoiceDate').value,dueDate:$('fDueDate').value,method:$('fPaymentMethod').value,discount:Number($('fDiscount').value)||0,vatRate:Number($('fVat').value)||0,serviceRate:Number($('fService').value)||0,paid:Number($('fPaid').value)||0,items:formItems()};return normalizeInvoice(x);
+}
+function closeModal(){$('invoiceModal').classList.add('hidden');document.body.classList.remove('overflow-hidden')}
+function save(){
+ const inv=collectForm(); if(!inv.guest||!inv.invoiceDate){toast('Please complete the guest and invoice date.');return}
+ if(editingId){invoices=invoices.map(x=>x.id===editingId?inv:x);toast('Invoice successfully updated.')}else{invoices.unshift(inv);toast('Invoice successfully created.')}
+ persist();closeModal();renderAll();
+}
+function editInvoice(id){const x=invoices.find(i=>i.id===id);if(x)openModal(x)}
+function askDelete(id){deletingId=id;$('deleteModal').classList.remove('hidden')}
+function closeDelete(){deletingId=null;$('deleteModal').classList.add('hidden')}
+function deleteInvoice(){invoices=invoices.filter(i=>i.id!==deletingId);persist();closeDelete();renderAll();toast('Invoice deleted.')}
+function invoiceHTML(inv){
+ const c=calc(inv);
+ return `<div class="space-y-6">
+ <div class="flex flex-col sm:flex-row justify-between gap-4"><div><div class="text-2xl font-black tracking-tight">GRAND BAY HOTEL & RESORT</div><div class="text-sm text-slate-500 mt-1">123 Rizal Boulevard, Dumaguete City, Negros Oriental<br>+63 35 225 0000 · reservations@grandbayhotel.com</div></div><div class="text-right"><div class="text-xs uppercase tracking-widest text-slate-400">Hotel Guest Invoice</div><div class="font-bold mt-1">${inv.id}</div>${statusBadge(c.status)}</div></div>
+ <div class="grid sm:grid-cols-2 gap-4 border-y border-slate-200 py-5"><div><div class="text-xs uppercase text-slate-400 font-bold">Bill To</div><div class="font-bold mt-1">${inv.guest}</div><div class="text-sm text-slate-500">${inv.guestId}<br>${inv.email||''}<br>${inv.address||''}</div></div><div><div class="text-xs uppercase text-slate-400 font-bold">Stay Details</div><div class="font-bold mt-1">Room ${inv.room} — ${inv.roomType}</div><div class="text-sm text-slate-500">${dateFmt(inv.checkin)} → ${dateFmt(inv.checkout)}<br>${inv.guests} · Booking ${inv.booking}</div></div></div>
+ <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b text-xs uppercase text-slate-400"><th class="text-left py-3">Date</th><th class="text-left py-3">Description</th><th class="text-left py-3">Category</th><th class="text-right py-3">Qty</th><th class="text-right py-3">Unit</th><th class="text-right py-3">Amount</th></tr></thead><tbody>${inv.items.map(i=>`<tr class="border-b border-slate-100"><td class="py-3">${dateFmt(i.date)}</td><td class="py-3 font-medium">${i.description}</td><td class="py-3 text-slate-500">${i.category}</td><td class="py-3 text-right">${i.qty}</td><td class="py-3 text-right">${peso(i.price)}</td><td class="py-3 text-right font-semibold">${peso(i.qty*i.price)}</td></tr>`).join('')}</tbody></table></div>
+ <div class="ml-auto max-w-sm space-y-2 text-sm"><div class="flex justify-between"><span>Subtotal</span><span>${peso(c.sub)}</span></div><div class="flex justify-between"><span>Discount</span><span>- ${peso(c.discount)}</span></div><div class="flex justify-between"><span>VAT (${inv.vatRate}%)</span><span>${peso(c.vat)}</span></div><div class="flex justify-between"><span>Service Charge (${inv.serviceRate}%)</span><span>${peso(c.service)}</span></div><div class="border-t pt-3 flex justify-between text-lg font-bold"><span>Grand Total</span><span>${peso(c.total)}</span></div><div class="flex justify-between"><span>Amount Paid</span><span>${peso(c.paid)}</span></div><div class="flex justify-between font-bold"><span>Balance Due</span><span class="${c.balance?'text-red-600':'text-emerald-600'}">${peso(c.balance)}</span></div></div>
+ <div class="pt-6 border-t text-center text-sm text-slate-500">Thank you for staying with Grand Bay Hotel & Resort.</div></div>`;
+}
+function viewInvoice(id){viewingId=id;const inv=invoices.find(x=>x.id===id);if(!inv)return;$('viewMeta').textContent=`${inv.id} · ${inv.guest} · ${dateFmt(inv.invoiceDate)}`;$('viewContent').innerHTML=invoiceHTML(inv);$('viewModal').classList.remove('hidden')}
+function makePrint(inv){$('printArea').innerHTML=invoiceHTML(inv);window.print()}
+async function makePDF(inv){
+  const wrapper=document.createElement('div');wrapper.style.cssText='position:absolute;left:-10000px;top:0;width:900px;background:white;padding:40px;font-family:Arial,sans-serif;color:#1e293b';wrapper.innerHTML=invoiceHTML(inv);document.body.appendChild(wrapper);
+  const canvas=await html2canvas(wrapper,{scale:2,backgroundColor:'#fff'});const {jsPDF}=window.jspdf;const pdf=new jsPDF('p','mm','a4');const img=canvas.toDataURL('image/png');const pw=190;const ph=canvas.height*pw/canvas.width;let y=10;pdf.addImage(img,'PNG',10,y,pw,ph);pdf.save(`${inv.id}.pdf`);wrapper.remove();
+}
+function printInvoice(id){const inv=invoices.find(x=>x.id===id);if(inv)makePrint(inv)}
+function exportExcel(){
+ const summary=invoices.map(inv=>{const c=calc(inv);return {'Invoice Number':inv.id,'Invoice Date':inv.invoiceDate,'Guest Name':inv.guest,'Guest ID':inv.guestId,'Booking Reference':inv.booking,'Room':inv.room,'Check-in':inv.checkin,'Check-out':inv.checkout,'Nights':Math.max(0,Math.round((new Date(inv.checkout)-new Date(inv.checkin))/86400000)),'Payment Method':inv.method,'Subtotal':c.sub,'VAT':c.vat,'Service Charge':c.service,'Discount':c.discount,'Grand Total':c.total,'Amount Paid':c.paid,'Balance':c.balance,'Status':c.status}});
+ const items=[];invoices.forEach(inv=>inv.items.forEach(i=>items.push({'Invoice Number':inv.id,'Date':i.date,'Description':i.description,'Category':i.category,'Quantity':i.qty,'Unit Price':i.price,'Amount':i.qty*i.price})));
+ const wb=XLSX.utils.book_new();const ws1=XLSX.utils.json_to_sheet(summary),ws2=XLSX.utils.json_to_sheet(items);
+ ws1['!cols']=[18,14,22,18,20,10,14,14,10,18,14,14,18,14,16,16,14,12].map(w=>({wch:w}));ws2['!cols']=[18,14,28,20,12,16,16].map(w=>({wch:w}));
+ [ws1,ws2].forEach(ws=>{ws['!autofilter']={ref:ws['!ref']};});
+ XLSX.utils.book_append_sheet(wb,ws1,'Invoice Summary');XLSX.utils.book_append_sheet(wb,ws2,'Invoice Items');XLSX.writeFile(wb,'Grand_Bay_Hotel_Invoices.xlsx');toast('Excel export downloaded.');
+}
+
+document.querySelectorAll('.nav-item').forEach(b=>b.className='nav-item w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 text-sm hover:bg-slate-900 hover:text-white'+(b.classList.contains('active')?' bg-blue-600 text-white':''));
+$('todayLabel').textContent=new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'});
+$('createBtn').onclick=()=>openModal();$('mobileCreateBtn').onclick=()=>openModal();$('closeModal').onclick=closeModal;$('cancelModal').onclick=closeModal;$('saveInvoice').onclick=save;$('addItem').onclick=()=>{addItemRow();recalcForm()};
+['fDiscount','fVat','fService','fPaid'].forEach(id=>$(id).addEventListener('input',recalcForm));
+$('search').oninput=renderTable;$('statusFilter').onchange=renderTable;$('dateFilter').onchange=renderTable;$('clearFilter').onclick=()=>{$('search').value='';$('statusFilter').value='';$('dateFilter').value='';renderTable()};
+$('closeView').onclick=()=>$('viewModal').classList.add('hidden');$('viewPrint').onclick=()=>{const x=invoices.find(i=>i.id===viewingId);if(x)makePrint(x)};$('viewPdf').onclick=()=>{const x=invoices.find(i=>i.id===viewingId);if(x)makePDF(x)};
+$('cancelDelete').onclick=closeDelete;$('confirmDelete').onclick=deleteInvoice;$('excelBtn').onclick=exportExcel;$('printBtn').onclick=()=>{const x=invoices[0];if(x)makePrint(x)};$('pdfBtn').onclick=()=>{const x=invoices[0];if(x)makePDF(x)};
+window.viewInvoice=viewInvoice;window.editInvoice=editInvoice;window.askDelete=askDelete;window.printInvoice=printInvoice;
+renderAll();
+</script>
+</body>
+</html>
